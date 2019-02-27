@@ -13,11 +13,11 @@ func main() {
 	router.HandleFunc("/login", Login).methods("POST")
 	router.HandleFunc("/users", RegisterUser).methods("POST")
 	router.HandleFunc("/users", GetUser).methods("GET")
-	router.HandleFunc("/comments", GetComment).methods("POST")
-	router.HandleFunc("/comments", DeleteComment).methods("DELETE")
-	router.HandleFunc("/comments", UpdateComment).methods("PATCH")
-	router.HandleFunc("/comments/add", PostComment).methods("POST")
-	router.HandleFunc("/comments/{id}", GetCommentById).methods("GET")
+	router.HandleFunc("/comments", GetComment).methods("GET")
+	router.HandleFunc("/comments", GetCommentById).methods("GET")
+	router.HandleFunc("/comments", PostComment).methods("POST")
+	router.HandleFunc("/comments", DeleteComment).methods("HAPUS")
+	router.HandleFunc("/comments", UpdateComment).methods("UBAH")
 	// execute
 	log.Fatal(http.ListenAndServe("0.0.0.0:8000", router))
 }
