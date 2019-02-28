@@ -27,6 +27,12 @@ type Comment struct {
 	UpdatedAt	string	`json:"updatedAt,omitempty"`
 }
 
+// ErrorResponse error response struct
+type ErrorResponse struct {
+	Status		string	`json:status`
+	Description	string	`json:description`
+}
+
 var users []User
 var comments []Comment
 
@@ -52,7 +58,33 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	r, _ := http.NewRequest("POST", urlStr, strings.NewReader(data.Encode()))
 	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, _ := client.Do(r)
+	resp, err := client.Do(r)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+
+	type jsonresp struct {
+		Status		string	`json:status`
+		AccessToken	string	`json:token`
+
+	}
+
+	var oauthResponse map[string]interface{}
+	body := json.NewDecoder(resp.Body).Decode(oauthResponse)
+	if resp.StatusCode == http.StatusOK {
+		jsonstr := jsonresp{
+			Status: resp.Status,
+			AccessToken: body["access_token"].(string),
+		}
+	} else {
+		jsonstr := ErrorResponse{
+			Status: "error",
+			Description: resp.Status,
+		}
+	}
+
+	json.NewEncoder(w).Encode(jsonstr)
 }
 func RegisterUser(w http.ResponseWriter, r *http.Request) {}
 func GetUser(w http.ResponseWriter, r *http.Request) {}
