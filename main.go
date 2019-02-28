@@ -4,10 +4,12 @@ import (
     "encoding/json"
     "log"
     "net/http"
+	"net/url"
 	"github.com/gorilla/mux"
 	"time"
 	"os"
 	"bytes"
+	"strings"
 )
 
 // User struct
@@ -31,6 +33,26 @@ var comments []Comment
 // Login authentication to https://oauth.infralabs.cs.ui.ac.id/
 func Login(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
+	oauthURL := os.Getenv("OAUTHURL")
+	tokenPath := "/oauth/token"
+	verificationPath := "/oauth/resource"
+
+	data := url.Values{}
+	data.Set("username", params["username"])
+	data.Set("password", params["password"])
+	data.Set("grant_type", "password")
+	data.Set("client_id", os.Getenv("CLIENTID"))
+	data.Set("client_secret", os.Getenv("CLIENTSECRET"))
+
+	u, _ := url.ParseRequestURI(oauthURL)
+	u.Path = tokenPath
+	urlStr := u.String()
+
+	client := &http.Client{}
+	r, _ := http.NewRequest("POST", urlStr, strings.NewReader(data.Encode()))
+	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, _ := client.Do(r)
 }
 func RegisterUser(w http.ResponseWriter, r *http.Request) {}
 func GetUser(w http.ResponseWriter, r *http.Request) {}
