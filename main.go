@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+
 	// "os"
 	"strings"
 
@@ -15,6 +16,7 @@ import (
 type User struct {
 	UserID      int    `json:"userId,omitempty"`
 	DisplayName string `json:"displayName,omitempty"`
+	ID          string `json:"-"`
 }
 
 // Comment struct
@@ -32,26 +34,44 @@ type ErrorResponse struct {
 	Description string `json:"error_description"`
 }
 
+// OAuthData response struct
 type OAuthData struct {
-	AccessToken  	string
-	UserID    		string
+	AccessToken string `json:"access_token,omitempty"`
+	ClientID    string `json:"client_id,omitempty"`
+	UserID      string `json:"user_id,omitempty"`
 }
 
 var users []User
 var comments []Comment
 
-// Authenticate validate access token given
-func Authenticate(token string) (ErrorResponse, OAuthData){
-	type oauthResponse struct {
-		AccessToken  	string 	`json:"access_token"`
-		Expires 		int 	`json:"expires"`
-		UserID    		string 	`json:"user_id"`
-		Scope        	string 	`json:"scope"`
-		ClientID 		string 	`json:"client_id"`
+// IsExist checker method for users
+func IsExist(users []User, user User) bool {
+	for _, b := range users {
+		if b.UserID == user.UserID || b.DisplayName == user.DisplayName {
+			return true
+		}
 	}
+	return false
+}
 
+// HeaderWriter helper method for response returns
+func HeaderWriter(w http.ResponseWriter, err ErrorResponse) {
+	if err.Description == "500 Internal Server Error" {
+		w.WriteHeader(http.StatusInternalServerError)
+	} else if err.Description == "401 Unauthorized" {
+		w.WriteHeader(http.StatusUnauthorized)
+	} else if err.Description == "200 OK" {
+		w.WriteHeader(http.StatusOK)
+	} else if err.Description == "403 Forbidden" {
+		w.WriteHeader(http.StatusForbidden)
+	}
+}
+
+// Authenticate validate access token given
+func Authenticate(token string) (ErrorResponse, OAuthData) {
 	var oauthresp OAuthData
 	var oautherror ErrorResponse
+	var errorresp ErrorResponse
 	oauthURL := "https://oauth.infralabs.cs.ui.ac.id"
 	verificationPath := "/oauth/resource"
 
@@ -61,61 +81,56 @@ func Authenticate(token string) (ErrorResponse, OAuthData){
 
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", urlStr, nil)
-	req.Header.Add("Authorization", "Bearer " + token)
+	req.Header.Add("Authorization", "Bearer "+token)
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Println("Request Error")
-		errorresp := ErrorResponse{
+		errorresp = ErrorResponse{
 			Status:      "error",
 			Description: "500 Internal Server Error",
 		}
 		log.Println(err)
-		return errorresp, oauthresp
 	} else {
 		defer resp.Body.Close()
-
-		// var jsonstr jsonresp
-		// var errorresp ErrorResponse
+		log.Println(resp.Body)
 		dec := json.NewDecoder(resp.Body)
+		log.Println(resp.Status)
 		if resp.StatusCode == http.StatusOK {
 			decodeError := dec.Decode(&oauthresp)
+			log.Println(oauthresp)
 			if decodeError != nil {
 				log.Println("Decode Data Error")
-				errorresp := ErrorResponse{
+				errorresp = ErrorResponse{
 					Status:      "error",
 					Description: "500 Internal Server Error",
 				}
-				log.Println(decodeError)
-				return errorresp, oauthresp
 			} else {
 				if oauthresp.AccessToken == token {
-					okReturn := OAuthData{
-						AccessToken:	oauthresp.AccessToken,
-						UserID:			oauthresp.UserID,
+					oauthresp = OAuthData{
+						AccessToken: oauthresp.AccessToken,
+						UserID:      oauthresp.UserID,
 					}
-					erroresp := ErrorResponse{
-						Status:			"OK",
-						Description:	"200 OK",
+					errorresp = ErrorResponse{
+						Status:      "OK",
+						Description: "200 OK",
 					}
-					return erroresp, okReturn
 				} else {
-					errorresp := ErrorResponse{
-						Status:			"error",
-						Description:	"401 Unauthorized",
+					errorresp = ErrorResponse{
+						Status:      "error",
+						Description: "401 Unauthorized",
 					}
-					return errorresp, oauthresp
 				}
 			}
 		} else {
-			errorresp := ErrorResponse{
+			errorresp = ErrorResponse{
 				Status:      "error",
 				Description: resp.Status,
 			}
 			dec.Decode(&oautherror)
 			log.Println(oautherror.Description)
-			return errorresp, oauthresp
 		}
 	}
+	return errorresp, oauthresp
 }
 
 // Login authentication to https://oauth.infralabs.cs.ui.ac.id/
@@ -127,7 +142,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 	type oauthResponse struct {
 		AccessToken  string `json:"access_token"`
-		ExpiresIn    int 	`json:"expires_in"`
+		ExpiresIn    int    `json:"expires_in"`
 		TokenType    string `json:"token_type"`
 		Scope        string `json:"scope"`
 		RefreshToken string `json:"refresh_token"`
@@ -188,6 +203,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 					Description: "500 Internal Server Error",
 				}
 				log.Println(decodeError)
+				HeaderWriter(w, errorresp)
 				json.NewEncoder(w).Encode(errorresp)
 			} else {
 				jsonstr := jsonresp{
@@ -202,13 +218,68 @@ func Login(w http.ResponseWriter, r *http.Request) {
 				Status:      "error",
 				Description: resp.Status,
 			}
+			HeaderWriter(w, errorresp)
 			json.NewEncoder(w).Encode(errorresp)
 			dec.Decode(&oautherror)
 			log.Println(oautherror.Description)
 		}
 	}
 }
-func RegisterUser(w http.ResponseWriter, r *http.Request)   {}
+
+// RegisterUser register user to db
+func RegisterUser(w http.ResponseWriter, r *http.Request) {
+	// var errorResp ErrorResponse
+	type Body struct {
+		DisplayName string `json:"displayName"`
+	}
+
+	type Response struct {
+		Status      string `json:"status"`
+		UserID      int    `json:"userId"`
+		DisplayName string `json:"displayName"`
+	}
+
+	authToken := strings.Split(r.Header.Get("Authorization"), " ")[1]
+	err, OAuthData := Authenticate(authToken)
+	if err.Description == "200 OK" {
+		var body Body
+		data := json.NewDecoder(r.Body)
+		error := data.Decode(&body)
+		if error != nil {
+			errorresp := ErrorResponse{
+				Status:      "error",
+				Description: "500 Internal Server Error",
+			}
+			HeaderWriter(w, errorresp)
+			json.NewEncoder(w).Encode(errorresp)
+		} else {
+			user := User{
+				UserID:      len(users) + 1,
+				DisplayName: body.DisplayName,
+				ID:          OAuthData.UserID,
+			}
+			if !IsExist(users, user) {
+				users = append(users, user)
+				response := Response{
+					Status:      "OK",
+					UserID:      user.UserID,
+					DisplayName: user.DisplayName,
+				}
+				json.NewEncoder(w).Encode(response)
+			} else {
+				errorresp := ErrorResponse{
+					Status:      "error",
+					Description: "403 Forbidden",
+				}
+				HeaderWriter(w, errorresp)
+				json.NewEncoder(w).Encode(errorresp)
+			}
+		}
+	} else {
+		HeaderWriter(w, err)
+		json.NewEncoder(w).Encode(err)
+	}
+}
 func GetUser(w http.ResponseWriter, r *http.Request)        {}
 func GetComment(w http.ResponseWriter, r *http.Request)     {}
 func GetCommentByID(w http.ResponseWriter, r *http.Request) {}
@@ -219,14 +290,14 @@ func UpdateComment(w http.ResponseWriter, r *http.Request)  {}
 func main() {
 	router := mux.NewRouter()
 	// routes
-	router.HandleFunc("/login", Login).Methods("POST")
-	router.HandleFunc("/users", RegisterUser).Methods("POST")
-	router.HandleFunc("/users", GetUser).Methods("GET")
-	router.HandleFunc("/comments", GetComment).Methods("GET")
-	router.HandleFunc("/comments", GetCommentByID).Methods("GET")
-	router.HandleFunc("/comments", PostComment).Methods("POST")
-	router.HandleFunc("/comments", DeleteComment).Methods("HAPUS")
-	router.HandleFunc("/comments", UpdateComment).Methods("UBAH")
+	router.HandleFunc("/api/v1/login", Login).Methods("POST")
+	router.HandleFunc("/api/v1/users", RegisterUser).Methods("POST")
+	router.HandleFunc("/api/v1/users", GetUser).Methods("GET")
+	router.HandleFunc("/api/v1/comments", GetComment).Methods("GET")
+	router.HandleFunc("/api/v1/comments", GetCommentByID).Methods("GET")
+	router.HandleFunc("/api/v1/comments", PostComment).Methods("POST")
+	router.HandleFunc("/api/v1/comments", DeleteComment).Methods("HAPUS")
+	router.HandleFunc("/api/v1/comments", UpdateComment).Methods("UBAH")
 	// execute
 	log.Fatal(http.ListenAndServe("0.0.0.0:8000", router))
 }
