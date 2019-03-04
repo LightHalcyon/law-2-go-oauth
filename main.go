@@ -292,36 +292,47 @@ func GetUser(w http.ResponseWriter, r *http.Request)        {
 		Data	[]User	`json:"data"`
 	}
 
-	params := r.URL.Query()
-	log.Println(params)
-	page, _ := strconv.Atoi(params["page"][0])
-	limit, _ := strconv.Atoi(params["limit"][0])
-	var total int
-	var data []User
-	if len(users) <= limit {
-		data = users
-		total = 1
-	} else {
-		total = len(users)/limit
-		if (limit*page)-1 == 0 {
-			data = users[0:(limit*page)-1]
+	authToken := strings.Split(r.Header.Get("Authorization"), " ")[1]
+	err, _ := Authenticate(authToken)
+	if err.Description == "200 OK" {
+		params := r.URL.Query()
+		log.Println(params)
+		page, _ := strconv.Atoi(params["page"][0])
+		limit, _ := strconv.Atoi(params["limit"][0])
+		var total int
+		var data []User
+		if len(users) <= limit || limit == 0 {
+			data = users
+			total = 1
 		} else {
-			data = users[(limit*(page-1))-1:(limit*page)-1]
+			total = len(users)/limit
+			if (limit*page)-1 == 0 {
+				data = users[0:(limit*page)-1]
+			} else {
+				data = users[(limit*(page-1))-1:(limit*page)-1]
+			}
 		}
+	
+		response := Response{
+			Status:	"OK",
+			Page:	page,
+			Limit:	limit,
+			Total:	total,
+			Data:	data,
+		}
+		json.NewEncoder(w).Encode(response)
+	} else {
+		HeaderWriter(w, err)
+		json.NewEncoder(w).Encode(err)
 	}
+}
 
-	response := Response{
-		Status:	"OK",
-		Page:	page,
-		Limit:	limit,
-		Total:	total,
-		Data:	data,
-	}
-	json.NewEncoder(w).Encode(response)
+// PostComment post comment method
+func PostComment(w http.ResponseWriter, r *http.Request)    {
+
 }
 func GetComment(w http.ResponseWriter, r *http.Request)     {}
 func GetCommentByID(w http.ResponseWriter, r *http.Request) {}
-func PostComment(w http.ResponseWriter, r *http.Request)    {}
 func DeleteComment(w http.ResponseWriter, r *http.Request)  {}
 func UpdateComment(w http.ResponseWriter, r *http.Request)  {}
 
