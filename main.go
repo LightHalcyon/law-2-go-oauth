@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
+	// "os"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -32,6 +32,11 @@ type ErrorResponse struct {
 	Description string `json:"description"`
 }
 
+type OAuthError struct {
+	Error 				string `json:"error"`
+	ErrorDescription 	string `json:"error_description"`
+}
+
 var users []User
 var comments []Comment
 
@@ -44,43 +49,54 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 	type oauthResponse struct {
 		AccessToken  string `json:"access_token"`
-		ExpiresIn    string `json:"expires_in"`
+		ExpiresIn    int 	`json:"expires_in"`
 		TokenType    string `json:"token_type"`
 		Scope        string `json:"scope"`
 		RefreshToken string `json:"refresh_token"`
 	}
 
-	params := mux.Vars(r)
-	oauthURL := os.Getenv("OAUTHURL")
+	type receivedData struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+	var params receivedData
+	receiveddata := json.NewDecoder(r.Body)
+	receiveddata.Decode(&params)
+	log.Println(params)
+	oauthURL := "https://oauth.infralabs.cs.ui.ac.id"
 	tokenPath := "/oauth/token"
 	// verificationPath := "/oauth/resource"
 
 	data := url.Values{}
-	data.Set("username", params["username"])
-	data.Set("password", params["password"])
+	data.Set("username", params.Username)
+	data.Set("password", params.Password)
 	data.Set("grant_type", "password")
-	data.Set("client_id", os.Getenv("CLIENTID"))
-	data.Set("client_secret", os.Getenv("CLIENTSECRET"))
+	data.Set("client_id", "9c6xS7Z1XQWHzkLxMZHxvs0vmy0zFBUK")
+	data.Set("client_secret", "hggpGtRNEMuU7nro4Z2WjODfB0Mdm3bc")
+	log.Println(data)
 
 	u, _ := url.ParseRequestURI(oauthURL)
 	u.Path = tokenPath
 	urlStr := u.String()
 
 	client := &http.Client{}
-	r, err := http.NewRequest("POST", urlStr, strings.NewReader(data.Encode()))
-	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	req, err := http.NewRequest("POST", urlStr, strings.NewReader(data.Encode()))
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := client.Do(r)
+	resp, err := client.Do(req)
 	if err != nil {
+		log.Println("Request Error")
 		errorresp := ErrorResponse{
 			Status:      "error",
 			Description: "500 Internal Server Error",
 		}
-
+		log.Println(err)
 		json.NewEncoder(w).Encode(errorresp)
 	} else {
 		defer resp.Body.Close()
 
+		var oautherror OAuthError
 		var oauthresp oauthResponse
 		// var jsonstr jsonresp
 		// var errorresp ErrorResponse
@@ -88,11 +104,12 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		if resp.StatusCode == http.StatusOK {
 			decodeError := dec.Decode(&oauthresp)
 			if decodeError != nil {
+				log.Println("Decode Data Error")
 				errorresp := ErrorResponse{
 					Status:      "error",
 					Description: "500 Internal Server Error",
 				}
-
+				log.Println(decodeError)
 				json.NewEncoder(w).Encode(errorresp)
 			} else {
 				jsonstr := jsonresp{
@@ -107,8 +124,9 @@ func Login(w http.ResponseWriter, r *http.Request) {
 				Status:      "error",
 				Description: resp.Status,
 			}
-
 			json.NewEncoder(w).Encode(errorresp)
+			dec.Decode(&oautherror)
+			log.Println(oautherror.ErrorDescription)
 		}
 	}
 }
