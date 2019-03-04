@@ -6,9 +6,7 @@ import (
     "net/http"
 	"net/url"
 	"github.com/gorilla/mux"
-	"time"
 	"os"
-	"bytes"
 	"strings"
 )
 
@@ -20,7 +18,7 @@ type User struct {
 
 // Comment struct
 type Comment struct {
-	ID			int	`json:"id,omitempty"`
+	ID			int		`json:"id,omitempty"`
 	Comment		string	`json:"comment,omitempty"`
 	CreatedBy	string	`json:"createdBy,omitempty"`
 	CreatedAt	string	`json:"createdAt,omitempty"`
@@ -29,8 +27,8 @@ type Comment struct {
 
 // ErrorResponse error response struct
 type ErrorResponse struct {
-	Status		string	`json:status`
-	Description	string	`json:description`
+	Status		string	`json:"status"`
+	Description	string	`json:"description"`
 }
 
 var users []User
@@ -41,7 +39,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	oauthURL := os.Getenv("OAUTHURL")
 	tokenPath := "/oauth/token"
-	verificationPath := "/oauth/resource"
+	// verificationPath := "/oauth/resource"
 
 	data := url.Values{}
 	data.Set("username", params["username"])
@@ -55,7 +53,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	urlStr := u.String()
 
 	client := &http.Client{}
-	r, _ := http.NewRequest("POST", urlStr, strings.NewReader(data.Encode()))
+	r, err := http.NewRequest("POST", urlStr, strings.NewReader(data.Encode()))
 	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := client.Do(r)
@@ -65,31 +63,53 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	type jsonresp struct {
-		Status		string	`json:status`
-		AccessToken	string	`json:token`
+		Status		string	`json:"status"`
+		AccessToken	string	`json:"token"`
 
 	}
 
-	var oauthResponse map[string]interface{}
-	body := json.NewDecoder(resp.Body).Decode(oauthResponse)
+	type oauthResponse struct {
+		AccessToken		string	`json:"access_token"`
+		ExpiresIn		string	`json:"expires_in"`
+		TokenType		string	`json:"token_type"`
+		Scope			string	`json:"scope"`
+		RefreshToken	string	`json:"refresh_token"`
+	}
+
+	var oauthresp oauthResponse
+	// var jsonstr jsonresp
+	// var errorresp ErrorResponse
+	dec := json.NewDecoder(resp.Body)
 	if resp.StatusCode == http.StatusOK {
-		jsonstr := jsonresp{
-			Status: resp.Status,
-			AccessToken: body["access_token"].(string),
+		decodeError := dec.Decode(&oauthresp)
+		if decodeError != nil {
+			errorresp := ErrorResponse{
+				Status: "error",
+				Description: "500 Internal Server Error",
+			}
+	
+			json.NewEncoder(w).Encode(errorresp)
+		} else {
+			jsonstr := jsonresp{
+				Status: resp.Status,
+				AccessToken: oauthresp.AccessToken,
+			}
+	
+			json.NewEncoder(w).Encode(jsonstr)
 		}
 	} else {
-		jsonstr := ErrorResponse{
+		errorresp := ErrorResponse{
 			Status: "error",
 			Description: resp.Status,
 		}
-	}
 
-	json.NewEncoder(w).Encode(jsonstr)
+		json.NewEncoder(w).Encode(errorresp)
+	}
 }
 func RegisterUser(w http.ResponseWriter, r *http.Request) {}
 func GetUser(w http.ResponseWriter, r *http.Request) {}
 func GetComment(w http.ResponseWriter, r *http.Request) {}
-func GetCommentById(w http.ResponseWriter, r *http.Request) {}
+func GetCommentByID(w http.ResponseWriter, r *http.Request) {}
 func PostComment(w http.ResponseWriter, r *http.Request) {}
 func DeleteComment(w http.ResponseWriter, r *http.Request) {}
 func UpdateComment(w http.ResponseWriter, r *http.Request) {}
@@ -101,7 +121,7 @@ func main() {
 	router.HandleFunc("/users", RegisterUser).Methods("POST")
 	router.HandleFunc("/users", GetUser).Methods("GET")
 	router.HandleFunc("/comments", GetComment).Methods("GET")
-	router.HandleFunc("/comments", GetCommentById).Methods("GET")
+	router.HandleFunc("/comments", GetCommentByID).Methods("GET")
 	router.HandleFunc("/comments", PostComment).Methods("POST")
 	router.HandleFunc("/comments", DeleteComment).Methods("HAPUS")
 	router.HandleFunc("/comments", UpdateComment).Methods("UBAH")
