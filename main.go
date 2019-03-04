@@ -29,16 +29,94 @@ type Comment struct {
 // ErrorResponse error response struct
 type ErrorResponse struct {
 	Status      string `json:"status"`
-	Description string `json:"description"`
+	Description string `json:"error_description"`
 }
 
-type OAuthError struct {
-	Error 				string `json:"error"`
-	ErrorDescription 	string `json:"error_description"`
+type OAuthData struct {
+	AccessToken  	string
+	UserID    		string
 }
 
 var users []User
 var comments []Comment
+
+// Authenticate validate access token given
+func Authenticate(token string) (ErrorResponse, OAuthData){
+	type oauthResponse struct {
+		AccessToken  	string 	`json:"access_token"`
+		Expires 		int 	`json:"expires"`
+		UserID    		string 	`json:"user_id"`
+		Scope        	string 	`json:"scope"`
+		ClientID 		string 	`json:"client_id"`
+	}
+
+	var oauthresp OAuthData
+	var oautherror ErrorResponse
+	oauthURL := "https://oauth.infralabs.cs.ui.ac.id"
+	verificationPath := "/oauth/resource"
+
+	u, _ := url.ParseRequestURI(oauthURL)
+	u.Path = verificationPath
+	urlStr := u.String()
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", urlStr, nil)
+	req.Header.Add("Authorization", "Bearer " + token)
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Println("Request Error")
+		errorresp := ErrorResponse{
+			Status:      "error",
+			Description: "500 Internal Server Error",
+		}
+		log.Println(err)
+		return errorresp, oauthresp
+	} else {
+		defer resp.Body.Close()
+
+		// var jsonstr jsonresp
+		// var errorresp ErrorResponse
+		dec := json.NewDecoder(resp.Body)
+		if resp.StatusCode == http.StatusOK {
+			decodeError := dec.Decode(&oauthresp)
+			if decodeError != nil {
+				log.Println("Decode Data Error")
+				errorresp := ErrorResponse{
+					Status:      "error",
+					Description: "500 Internal Server Error",
+				}
+				log.Println(decodeError)
+				return errorresp, oauthresp
+			} else {
+				if oauthresp.AccessToken == token {
+					okReturn := OAuthData{
+						AccessToken:	oauthresp.AccessToken,
+						UserID:			oauthresp.UserID,
+					}
+					erroresp := ErrorResponse{
+						Status:			"OK",
+						Description:	"200 OK",
+					}
+					return erroresp, okReturn
+				} else {
+					errorresp := ErrorResponse{
+						Status:			"error",
+						Description:	"401 Unauthorized",
+					}
+					return errorresp, oauthresp
+				}
+			}
+		} else {
+			errorresp := ErrorResponse{
+				Status:      "error",
+				Description: resp.Status,
+			}
+			dec.Decode(&oautherror)
+			log.Println(oautherror.Description)
+			return errorresp, oauthresp
+		}
+	}
+}
 
 // Login authentication to https://oauth.infralabs.cs.ui.ac.id/
 func Login(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +174,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	} else {
 		defer resp.Body.Close()
 
-		var oautherror OAuthError
+		var oautherror ErrorResponse
 		var oauthresp oauthResponse
 		// var jsonstr jsonresp
 		// var errorresp ErrorResponse
@@ -126,7 +204,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 			}
 			json.NewEncoder(w).Encode(errorresp)
 			dec.Decode(&oautherror)
-			log.Println(oautherror.ErrorDescription)
+			log.Println(oautherror.Description)
 		}
 	}
 }
