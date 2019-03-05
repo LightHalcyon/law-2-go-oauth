@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-
+	"time"
 	// "os"
 	"strings"
 
@@ -22,11 +22,11 @@ type User struct {
 
 // Comment struct
 type Comment struct {
-	ID        int    `json:"id,omitempty"`
-	Comment   string `json:"comment,omitempty"`
-	CreatedBy string `json:"createdBy,omitempty"`
-	CreatedAt string `json:"createdAt,omitempty"`
-	UpdatedAt string `json:"updatedAt,omitempty"`
+	ID        int    	`json:"id,omitempty"`
+	Comment   string 	`json:"comment,omitempty"`
+	CreatedBy string 	`json:"createdBy,omitempty"`
+	CreatedAt string 	`json:"createdAt,omitempty"`
+	UpdatedAt string 	`json:"updatedAt,omitempty"`
 }
 
 // ErrorResponse error response struct
@@ -53,6 +53,16 @@ func IsExist(users []User, user User) bool {
 		}
 	}
 	return false
+}
+
+// FindUName DisplayName finder
+func FindUName(users []User, userID string) string {
+	for _, b := range users {
+		if b.ID == userID {
+			return b.DisplayName
+		}
+	}
+	return ""
 }
 
 // HeaderWriter helper method for response returns
@@ -296,7 +306,6 @@ func GetUser(w http.ResponseWriter, r *http.Request)        {
 	err, _ := Authenticate(authToken)
 	if err.Description == "200 OK" {
 		params := r.URL.Query()
-		log.Println(params)
 		page, _ := strconv.Atoi(params["page"][0])
 		limit, _ := strconv.Atoi(params["limit"][0])
 		var total int
@@ -329,7 +338,56 @@ func GetUser(w http.ResponseWriter, r *http.Request)        {
 
 // PostComment post comment method
 func PostComment(w http.ResponseWriter, r *http.Request)    {
+	type Response struct{
+		Status	string	`json:"status"`
+		Data	Comment	`json:"data"`
+	}
 
+	type Body struct {
+		Comment	string	`json:"comment"`
+	}
+
+	authToken := strings.Split(r.Header.Get("Authorization"), " ")[1]
+	err, OAuthData := Authenticate(authToken)
+	if err.Description == "200 OK" {
+		var body Body
+		data := json.NewDecoder(r.Body)
+		error := data.Decode(&body)
+		if error != nil {
+			errorresp := ErrorResponse{
+				Status:      "error",
+				Description: "500 Internal Server Error",
+			}
+			HeaderWriter(w, errorresp)
+			json.NewEncoder(w).Encode(errorresp)
+		} else {
+			displayName := FindUName(users, OAuthData.UserID)
+			if displayName != "" {
+				comment := Comment{
+					ID:				len(comments)+1,
+					Comment:		body.Comment,
+					CreatedBy:		displayName,
+					CreatedAt:		time.Now().Format("2006-01-02T15:04:05-0700"),
+					UpdatedAt:		time.Now().Format("2006-01-02T15:04:05-0700"),
+				}
+				response := Response{
+					Status:		"OK",
+					Data:		comment,
+				}
+				json.NewEncoder(w).Encode(response)
+			} else {
+				errorresp := ErrorResponse{
+					Status:      "error",
+					Description: "401 Unauthorized",
+				}
+				HeaderWriter(w, errorresp)
+				json.NewEncoder(w).Encode(errorresp)
+			}
+		}
+	} else {
+		HeaderWriter(w, err)
+		json.NewEncoder(w).Encode(err)
+	}
 }
 func GetComment(w http.ResponseWriter, r *http.Request)     {}
 func GetCommentByID(w http.ResponseWriter, r *http.Request) {}
