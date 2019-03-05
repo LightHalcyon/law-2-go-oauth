@@ -86,6 +86,17 @@ func FilterCommentsByDate(comments []Comment, startTime time.Time, endTime time.
 	return output
 }
 
+// FindComment finds comment
+func FindComment(comments []Comment, id int) Comment {
+	var output Comment
+	for _, b := range comments {
+		if b.ID == id {
+			return b
+		}
+	}
+	return output
+}
+
 // FindUName DisplayName finder
 func FindUName(users []User, userID string) string {
 	for _, b := range users {
@@ -394,8 +405,14 @@ func PostComment(w http.ResponseWriter, r *http.Request) {
 		} else {
 			displayName := FindUName(users, OAuthData.UserID)
 			if displayName != "" {
+				var id int
+				if len(comments) == 0 {
+					id = 1
+				} else {
+					id = comments[len(comments)-1].ID
+				}
 				comment := Comment{
-					ID:        len(comments) + 1,
+					ID:        id,
 					Comment:   body.Comment,
 					CreatedBy: displayName,
 					CreatedAt: time.Now().Format("2006-01-02T15:04:05-0700"),
@@ -477,7 +494,36 @@ func GetComment(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(err)
 	}
 }
-func GetCommentByID(w http.ResponseWriter, r *http.Request) {}
+
+// GetCommentByID search comments for comment with id = {id}
+func GetCommentByID(w http.ResponseWriter, r *http.Request) {
+	type Response struct{
+		Status	string	`json:"status"`
+		Data	Comment	`json:"data"`
+	}
+	authToken := strings.Split(r.Header.Get("Authorization"), " ")[1]
+	err, _ := Authenticate(authToken)
+	if err.Description == "200 OK" {
+		ID, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			errorresp := ErrorResponse{
+				Status:      "error",
+				Description: "500 Internal Server Error",
+			}
+			HeaderWriter(w, errorresp)
+			json.NewEncoder(w).Encode(errorresp)
+		} else {
+			response := Response{
+				Status:		"OK",
+				Data:		FindComment(comments, ID),
+			}
+			json.NewEncoder(w).Encode(response)
+		}
+	} else {
+		HeaderWriter(w, err)
+		json.NewEncoder(w).Encode(err)
+	}
+}
 func DeleteComment(w http.ResponseWriter, r *http.Request)  {}
 func UpdateComment(w http.ResponseWriter, r *http.Request)  {}
 
