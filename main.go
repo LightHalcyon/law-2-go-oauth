@@ -87,21 +87,21 @@ func FilterCommentsByDate(comments []Comment, startTime time.Time, endTime time.
 }
 
 // FindComment finds comment
-func FindComment(comments []Comment, id int) Comment {
+func FindComment(comments []Comment, id int) (Comment, int) {
 	var output Comment
-	for _, b := range comments {
+	for i, b := range comments {
 		if b.ID == id {
-			return b
+			return b, i
 		}
 	}
-	return output
+	return output, -1
 }
 
 // DelComment delete comment helper
 func DelComment(comments []Comment, id int, userID string) ([]Comment, ErrorResponse) {
 	err := ErrorResponse{
-		Status:			"OK",
-		Description:	"200 OK",
+		Status:      "OK",
+		Description: "200 OK",
 	}
 	uname := FindUName(users, userID)
 	for i, b := range comments {
@@ -533,9 +533,10 @@ func GetCommentByID(w http.ResponseWriter, r *http.Request) {
 			// HeaderWriter(w, errorresp)
 			json.NewEncoder(w).Encode(errorresp)
 		} else {
+			comment, _ := FindComment(comments, ID)
 			response := Response{
 				Status: "OK",
-				Data:   FindComment(comments, ID),
+				Data:   comment,
 			}
 			json.NewEncoder(w).Encode(response)
 		}
@@ -586,7 +587,57 @@ func DeleteComment(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(err)
 	}
 }
-func UpdateComment(w http.ResponseWriter, r *http.Request) {}
+
+// UpdateComment updates comment based on it's id
+func UpdateComment(w http.ResponseWriter, r *http.Request) {
+	type Response struct {
+		Status string  `json:"status"`
+		Data   Comment `json:"data"`
+	}
+
+	type Body struct {
+		ID      int    `json:"id"`
+		Comment string `json:"comment"`
+	}
+
+	authToken := strings.Split(r.Header.Get("Authorization"), " ")[1]
+	err, OAuthData := Authenticate(authToken)
+	if err.Description == "200 OK" {
+		var body Body
+		data := json.NewDecoder(r.Body)
+		error := data.Decode(&body)
+		if error != nil {
+			errorresp := ErrorResponse{
+				Status:      "error",
+				Description: "500 Internal Server Error",
+			}
+			// HeaderWriter(w, errorresp)
+			json.NewEncoder(w).Encode(errorresp)
+		} else {
+			commentItem, i := FindComment(comments, body.ID)
+			if commentItem.CreatedBy != FindUName(users, OAuthData.UserID) {
+				errorresp := ErrorResponse{
+					Status:      "error",
+					Description: "401 Unauthorized",
+				}
+				HeaderWriter(w, errorresp)
+				json.NewEncoder(w).Encode(errorresp)
+			} else {
+				commentItem.Comment = body.Comment
+				commentItem.UpdatedAt = time.Now().Format("2006-01-02T15:04:05-0700")
+				comments[i] = commentItem
+				response := Response{
+					Status: "OK",
+					Data:   commentItem,
+				}
+				json.NewEncoder(w).Encode(response)
+			}
+		}
+	} else {
+		HeaderWriter(w, err)
+		json.NewEncoder(w).Encode(err)
+	}
+}
 
 func main() {
 	router := mux.NewRouter()
