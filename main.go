@@ -1,12 +1,13 @@
 package main
 
 import (
-	"strconv"
 	"encoding/json"
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
+
 	// "os"
 	"strings"
 
@@ -22,11 +23,11 @@ type User struct {
 
 // Comment struct
 type Comment struct {
-	ID        int    	`json:"id,omitempty"`
-	Comment   string 	`json:"comment,omitempty"`
-	CreatedBy string 	`json:"createdBy,omitempty"`
-	CreatedAt string 	`json:"createdAt,omitempty"`
-	UpdatedAt string 	`json:"updatedAt,omitempty"`
+	ID        int    `json:"id,omitempty"`
+	Comment   string `json:"comment,omitempty"`
+	CreatedBy string `json:"createdBy,omitempty"`
+	CreatedAt string `json:"createdAt,omitempty"`
+	UpdatedAt string `json:"updatedAt,omitempty"`
 }
 
 // ErrorResponse error response struct
@@ -44,6 +45,7 @@ type OAuthData struct {
 
 var users []User
 var comments []Comment
+var defaultTime time.Time
 
 // IsExist checker method for users
 func IsExist(users []User, user User) bool {
@@ -53,6 +55,35 @@ func IsExist(users []User, user User) bool {
 		}
 	}
 	return false
+}
+
+// FilterCommentsByUName filters comment by user
+func FilterCommentsByUName(comments []Comment, uname string) []Comment {
+	var output []Comment
+	for _, b := range comments {
+		if b.CreatedBy == uname {
+			output = append(output, b)
+		}
+	}
+	return output
+}
+
+// FilterCommentsByDate filters comments by date
+func FilterCommentsByDate(comments []Comment, startTime time.Time, endTime time.Time) []Comment {
+	var output []Comment
+	for _, b := range comments {
+		updated, _ := time.Parse("2006-01-02T15:04:05-0700", b.UpdatedAt)
+		if endTime != defaultTime {
+			if updated.After(startTime) && updated.Before(endTime) {
+				output = append(output, b)
+			}
+		} else {
+			if updated.After(startTime) {
+				output = append(output, b)
+			}
+		}
+	}
+	return output
 }
 
 // FindUName DisplayName finder
@@ -293,13 +324,13 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetUser gets list of all user in users
-func GetUser(w http.ResponseWriter, r *http.Request)        {
+func GetUser(w http.ResponseWriter, r *http.Request) {
 	type Response struct {
-		Status	string	`json:"status"`
-		Page	int		`json:"page"`
-		Limit	int		`json:"limit"`
-		Total	int		`json:"total"`
-		Data	[]User	`json:"data"`
+		Status string `json:"status"`
+		Page   int    `json:"page"`
+		Limit  int    `json:"limit"`
+		Total  int    `json:"total"`
+		Data   []User `json:"data"`
 	}
 
 	authToken := strings.Split(r.Header.Get("Authorization"), " ")[1]
@@ -314,20 +345,20 @@ func GetUser(w http.ResponseWriter, r *http.Request)        {
 			data = users
 			total = 1
 		} else {
-			total = len(users)/limit
+			total = len(users) / limit
 			if (limit*page)-1 == 0 {
-				data = users[0:(limit*page)-1]
+				data = users[0 : (limit*page)-1]
 			} else {
-				data = users[(limit*(page-1))-1:(limit*page)-1]
+				data = users[(limit*(page-1))-1 : (limit*page)-1]
 			}
 		}
-	
+
 		response := Response{
-			Status:	"OK",
-			Page:	page,
-			Limit:	limit,
-			Total:	total,
-			Data:	data,
+			Status: "OK",
+			Page:   page,
+			Limit:  limit,
+			Total:  total,
+			Data:   data,
 		}
 		json.NewEncoder(w).Encode(response)
 	} else {
@@ -337,14 +368,14 @@ func GetUser(w http.ResponseWriter, r *http.Request)        {
 }
 
 // PostComment post comment method
-func PostComment(w http.ResponseWriter, r *http.Request)    {
-	type Response struct{
-		Status	string	`json:"status"`
-		Data	Comment	`json:"data"`
+func PostComment(w http.ResponseWriter, r *http.Request) {
+	type Response struct {
+		Status string  `json:"status"`
+		Data   Comment `json:"data"`
 	}
 
 	type Body struct {
-		Comment	string	`json:"comment"`
+		Comment string `json:"comment"`
 	}
 
 	authToken := strings.Split(r.Header.Get("Authorization"), " ")[1]
@@ -364,15 +395,16 @@ func PostComment(w http.ResponseWriter, r *http.Request)    {
 			displayName := FindUName(users, OAuthData.UserID)
 			if displayName != "" {
 				comment := Comment{
-					ID:				len(comments)+1,
-					Comment:		body.Comment,
-					CreatedBy:		displayName,
-					CreatedAt:		time.Now().Format("2006-01-02T15:04:05-0700"),
-					UpdatedAt:		time.Now().Format("2006-01-02T15:04:05-0700"),
+					ID:        len(comments) + 1,
+					Comment:   body.Comment,
+					CreatedBy: displayName,
+					CreatedAt: time.Now().Format("2006-01-02T15:04:05-0700"),
+					UpdatedAt: time.Now().Format("2006-01-02T15:04:05-0700"),
 				}
+				comments = append(comments, comment)
 				response := Response{
-					Status:		"OK",
-					Data:		comment,
+					Status: "OK",
+					Data:   comment,
 				}
 				json.NewEncoder(w).Encode(response)
 			} else {
@@ -389,7 +421,62 @@ func PostComment(w http.ResponseWriter, r *http.Request)    {
 		json.NewEncoder(w).Encode(err)
 	}
 }
-func GetComment(w http.ResponseWriter, r *http.Request)     {}
+
+// GetComment get comment list method
+func GetComment(w http.ResponseWriter, r *http.Request) {
+	type Response struct {
+		Status string    `json:"status"`
+		Page   int       `json:"page"`
+		Limit  int       `json:"limit"`
+		Total  int       `json:"total"`
+		Data   []Comment `json:"data"`
+	}
+
+	authToken := strings.Split(r.Header.Get("Authorization"), " ")[1]
+	err, _ := Authenticate(authToken)
+	if err.Description == "200 OK" {
+		params := r.URL.Query()
+		page, _ := strconv.Atoi(params["page"][0])
+		limit, _ := strconv.Atoi(params["limit"][0])
+		createdBy := params["createdBy"][0]
+		var startDate time.Time
+		var endDate time.Time
+		if params["startDate"][0] != "" {
+			startDate, _ = time.Parse("2006-01-02T15:04:05-0700", params["startDate"][0])
+		}
+		if params["endDate"][0] != "" {
+			endDate, _ = time.Parse("2006-01-02T15:04:05-0700", params["endDate"][0])
+		}
+		var total int
+		data := comments
+		if createdBy != "" {
+			data = FilterCommentsByUName(data, createdBy)
+		}
+		data = FilterCommentsByDate(data, startDate, endDate)
+		if len(data) <= limit || limit == 0 {
+			total = 1
+		} else {
+			total = len(data) / limit
+			if (limit*page)-1 == 0 {
+				data = data[0 : (limit*page)-1]
+			} else {
+				data = data[(limit*(page-1))-1 : (limit*page)-1]
+			}
+		}
+
+		response := Response{
+			Status: "OK",
+			Page:   page,
+			Limit:  limit,
+			Total:  total,
+			Data:   data,
+		}
+		json.NewEncoder(w).Encode(response)
+	} else {
+		HeaderWriter(w, err)
+		json.NewEncoder(w).Encode(err)
+	}
+}
 func GetCommentByID(w http.ResponseWriter, r *http.Request) {}
 func DeleteComment(w http.ResponseWriter, r *http.Request)  {}
 func UpdateComment(w http.ResponseWriter, r *http.Request)  {}
@@ -401,7 +488,7 @@ func main() {
 	router.HandleFunc("/api/v1/users", RegisterUser).Methods("POST")
 	router.HandleFunc("/api/v1/users", GetUser).Methods("GET")
 	router.HandleFunc("/api/v1/comments", GetComment).Methods("GET")
-	router.HandleFunc("/api/v1/comments", GetCommentByID).Methods("GET")
+	router.HandleFunc("/api/v1/comments/{id}", GetCommentByID).Methods("GET")
 	router.HandleFunc("/api/v1/comments", PostComment).Methods("POST")
 	router.HandleFunc("/api/v1/comments", DeleteComment).Methods("HAPUS")
 	router.HandleFunc("/api/v1/comments", UpdateComment).Methods("UBAH")
