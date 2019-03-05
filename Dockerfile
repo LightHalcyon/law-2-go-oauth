@@ -4,7 +4,7 @@ FROM golang:${GO_VERSION} AS builder
 
 ADD . /go/src/github.com/reznov53/law-2-go-oauth
 
-ENV OAUTHURL=https://oauth.infralabs.cs.ui.ac.id
+ENV OAUTHURL=http://172.22.0.2
 ENV CLIENTID=9c6xS7Z1XQWHzkLxMZHxvs0vmy0zFBUK
 ENV CLIENTSECRET=hggpGtRNEMuU7nro4Z2WjODfB0Mdm3bc
 
