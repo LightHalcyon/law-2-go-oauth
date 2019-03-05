@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	// "os"
+	"os"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -145,7 +145,7 @@ func Authenticate(token string) (ErrorResponse, OAuthData) {
 	var oauthresp OAuthData
 	var oautherror ErrorResponse
 	var errorresp ErrorResponse
-	oauthURL := "https://oauth.infralabs.cs.ui.ac.id"
+	oauthURL := os.Getenv("OAUTHURL")
 	verificationPath := "/oauth/resource"
 
 	u, _ := url.ParseRequestURI(oauthURL)
@@ -230,7 +230,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	receiveddata := json.NewDecoder(r.Body)
 	receiveddata.Decode(&params)
 	log.Println(params)
-	oauthURL := "https://oauth.infralabs.cs.ui.ac.id"
+	oauthURL := os.Getenv("OAUTHURL")
 	tokenPath := "/oauth/token"
 	// verificationPath := "/oauth/resource"
 
@@ -238,8 +238,8 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	data.Set("username", params.Username)
 	data.Set("password", params.Password)
 	data.Set("grant_type", "password")
-	data.Set("client_id", "9c6xS7Z1XQWHzkLxMZHxvs0vmy0zFBUK")
-	data.Set("client_secret", "hggpGtRNEMuU7nro4Z2WjODfB0Mdm3bc")
+	data.Set("client_id", os.Getenv("CLIENTID"))
+	data.Set("client_secret", os.Getenv("CLIENTSECRET"))
 	log.Println(data)
 
 	u, _ := url.ParseRequestURI(oauthURL)
@@ -468,51 +468,44 @@ func GetComment(w http.ResponseWriter, r *http.Request) {
 		Total  int       `json:"total"`
 		Data   []Comment `json:"data"`
 	}
-
-	authToken := strings.Split(r.Header.Get("Authorization"), " ")[1]
-	err, _ := Authenticate(authToken)
-	if err.Description == "200 OK" {
-		params := r.URL.Query()
-		page, _ := strconv.Atoi(params["page"][0])
-		limit, _ := strconv.Atoi(params["limit"][0])
-		createdBy := params["createdBy"][0]
-		var startDate time.Time
-		var endDate time.Time
-		if params["startDate"][0] != "" {
-			startDate, _ = time.Parse("2006-01-02T15:04:05-0700", params["startDate"][0])
-		}
-		if params["endDate"][0] != "" {
-			endDate, _ = time.Parse("2006-01-02T15:04:05-0700", params["endDate"][0])
-		}
-		var total int
-		data := comments
-		if createdBy != "" {
-			data = FilterCommentsByUName(data, createdBy)
-		}
-		data = FilterCommentsByDate(data, startDate, endDate)
-		if len(data) <= limit || limit == 0 {
-			total = 1
-		} else {
-			total = len(data) / limit
-			if (limit*page)-1 == 0 {
-				data = data[0 : (limit*page)-1]
-			} else {
-				data = data[(limit*(page-1))-1 : (limit*page)-1]
-			}
-		}
-
-		response := Response{
-			Status: "OK",
-			Page:   page,
-			Limit:  limit,
-			Total:  total,
-			Data:   data,
-		}
-		json.NewEncoder(w).Encode(response)
-	} else {
-		HeaderWriter(w, err)
-		json.NewEncoder(w).Encode(err)
+	
+	params := r.URL.Query()
+	page, _ := strconv.Atoi(params["page"][0])
+	limit, _ := strconv.Atoi(params["limit"][0])
+	createdBy := params["createdBy"][0]
+	var startDate time.Time
+	var endDate time.Time
+	if params["startDate"][0] != "" {
+		startDate, _ = time.Parse("2006-01-02T15:04:05-0700", params["startDate"][0])
 	}
+	if params["endDate"][0] != "" {
+		endDate, _ = time.Parse("2006-01-02T15:04:05-0700", params["endDate"][0])
+	}
+	var total int
+	data := comments
+	if createdBy != "" {
+		data = FilterCommentsByUName(data, createdBy)
+	}
+	data = FilterCommentsByDate(data, startDate, endDate)
+	if len(data) <= limit || limit == 0 {
+		total = 1
+	} else {
+		total = len(data) / limit
+		if (limit*page)-1 == 0 {
+			data = data[0 : (limit*page)-1]
+		} else {
+			data = data[(limit*(page-1))-1 : (limit*page)-1]
+		}
+	}
+
+	response := Response{
+		Status: "OK",
+		Page:   page,
+		Limit:  limit,
+		Total:  total,
+		Data:   data,
+	}
+	json.NewEncoder(w).Encode(response)
 }
 
 // GetCommentByID search comments for comment with id = {id}
@@ -521,28 +514,21 @@ func GetCommentByID(w http.ResponseWriter, r *http.Request) {
 		Status string  `json:"status"`
 		Data   Comment `json:"data"`
 	}
-	authToken := strings.Split(r.Header.Get("Authorization"), " ")[1]
-	err, _ := Authenticate(authToken)
-	if err.Description == "200 OK" {
-		ID, err := strconv.Atoi(mux.Vars(r)["id"])
-		if err != nil {
-			errorresp := ErrorResponse{
-				Status:      "error",
-				Description: "500 Internal Server Error",
-			}
-			// HeaderWriter(w, errorresp)
-			json.NewEncoder(w).Encode(errorresp)
-		} else {
-			comment, _ := FindComment(comments, ID)
-			response := Response{
-				Status: "OK",
-				Data:   comment,
-			}
-			json.NewEncoder(w).Encode(response)
+	ID, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		errorresp := ErrorResponse{
+			Status:      "error",
+			Description: "500 Internal Server Error",
 		}
+		// HeaderWriter(w, errorresp)
+		json.NewEncoder(w).Encode(errorresp)
 	} else {
-		HeaderWriter(w, err)
-		json.NewEncoder(w).Encode(err)
+		comment, _ := FindComment(comments, ID)
+		response := Response{
+			Status: "OK",
+			Data:   comment,
+		}
+		json.NewEncoder(w).Encode(response)
 	}
 }
 
