@@ -97,6 +97,17 @@ func FindComment(comments []Comment, id int) Comment {
 	return output
 }
 
+// DelComment delete comment helper
+func DelComment(comments []Comment, id int) []Comment {
+	for i, b := range comments {
+		if b.ID == id {
+			comments = append(comments[:i], comments[i+1:]...)
+			return comments
+		}
+	}
+	return comments
+}
+
 // FindUName DisplayName finder
 func FindUName(users []User, userID string) string {
 	for _, b := range users {
@@ -256,7 +267,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 					Description: "500 Internal Server Error",
 				}
 				log.Println(decodeError)
-				HeaderWriter(w, errorresp)
+				// HeaderWriter(w, errorresp)
 				json.NewEncoder(w).Encode(errorresp)
 			} else {
 				jsonstr := jsonresp{
@@ -303,7 +314,7 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 				Status:      "error",
 				Description: "500 Internal Server Error",
 			}
-			HeaderWriter(w, errorresp)
+			// HeaderWriter(w, errorresp)
 			json.NewEncoder(w).Encode(errorresp)
 		} else {
 			user := User{
@@ -324,7 +335,7 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 					Status:      "error",
 					Description: "403 Forbidden",
 				}
-				HeaderWriter(w, errorresp)
+				// HeaderWriter(w, errorresp)
 				json.NewEncoder(w).Encode(errorresp)
 			}
 		}
@@ -400,7 +411,7 @@ func PostComment(w http.ResponseWriter, r *http.Request) {
 				Status:      "error",
 				Description: "500 Internal Server Error",
 			}
-			HeaderWriter(w, errorresp)
+			// HeaderWriter(w, errorresp)
 			json.NewEncoder(w).Encode(errorresp)
 		} else {
 			displayName := FindUName(users, OAuthData.UserID)
@@ -497,9 +508,9 @@ func GetComment(w http.ResponseWriter, r *http.Request) {
 
 // GetCommentByID search comments for comment with id = {id}
 func GetCommentByID(w http.ResponseWriter, r *http.Request) {
-	type Response struct{
-		Status	string	`json:"status"`
-		Data	Comment	`json:"data"`
+	type Response struct {
+		Status string  `json:"status"`
+		Data   Comment `json:"data"`
 	}
 	authToken := strings.Split(r.Header.Get("Authorization"), " ")[1]
 	err, _ := Authenticate(authToken)
@@ -510,12 +521,12 @@ func GetCommentByID(w http.ResponseWriter, r *http.Request) {
 				Status:      "error",
 				Description: "500 Internal Server Error",
 			}
-			HeaderWriter(w, errorresp)
+			// HeaderWriter(w, errorresp)
 			json.NewEncoder(w).Encode(errorresp)
 		} else {
 			response := Response{
-				Status:		"OK",
-				Data:		FindComment(comments, ID),
+				Status: "OK",
+				Data:   FindComment(comments, ID),
 			}
 			json.NewEncoder(w).Encode(response)
 		}
@@ -524,8 +535,43 @@ func GetCommentByID(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(err)
 	}
 }
-func DeleteComment(w http.ResponseWriter, r *http.Request)  {}
-func UpdateComment(w http.ResponseWriter, r *http.Request)  {}
+
+// DeleteComment delete comment with id
+func DeleteComment(w http.ResponseWriter, r *http.Request) {
+	type Response struct {
+		Status string `json:"status"`
+	}
+
+	type Body struct {
+		ID int `json:"id"`
+	}
+
+	authToken := strings.Split(r.Header.Get("Authorization"), " ")[1]
+	err, _ := Authenticate(authToken)
+	if err.Description == "200 OK" {
+		var body Body
+		data := json.NewDecoder(r.Body)
+		error := data.Decode(&body)
+		if error != nil {
+			errorresp := ErrorResponse{
+				Status:      "error",
+				Description: "500 Internal Server Error",
+			}
+			// HeaderWriter(w, errorresp)
+			json.NewEncoder(w).Encode(errorresp)
+		} else {
+			comments = DelComment(comments, body.ID)
+			response := Response{
+				Status: "OK",
+			}
+			json.NewEncoder(w).Encode(response)
+		}
+	} else {
+		HeaderWriter(w, err)
+		json.NewEncoder(w).Encode(err)
+	}
+}
+func UpdateComment(w http.ResponseWriter, r *http.Request) {}
 
 func main() {
 	router := mux.NewRouter()
