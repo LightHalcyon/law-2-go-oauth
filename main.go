@@ -98,14 +98,23 @@ func FindComment(comments []Comment, id int) Comment {
 }
 
 // DelComment delete comment helper
-func DelComment(comments []Comment, id int) []Comment {
+func DelComment(comments []Comment, id int, userID string) ([]Comment, ErrorResponse) {
+	err := ErrorResponse{
+		Status:			"OK",
+		Description:	"200 OK",
+	}
+	uname := FindUName(users, userID)
 	for i, b := range comments {
-		if b.ID == id {
+		if b.ID == id && b.CreatedBy == uname {
 			comments = append(comments[:i], comments[i+1:]...)
-			return comments
+			return comments, err
+		} else if b.ID == id && b.CreatedBy != uname {
+			err.Status = "error"
+			err.Description = "401 Unauthorized"
+			return comments, err
 		}
 	}
-	return comments
+	return comments, err
 }
 
 // FindUName DisplayName finder
@@ -547,7 +556,7 @@ func DeleteComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	authToken := strings.Split(r.Header.Get("Authorization"), " ")[1]
-	err, _ := Authenticate(authToken)
+	err, OAuthData := Authenticate(authToken)
 	if err.Description == "200 OK" {
 		var body Body
 		data := json.NewDecoder(r.Body)
@@ -560,11 +569,17 @@ func DeleteComment(w http.ResponseWriter, r *http.Request) {
 			// HeaderWriter(w, errorresp)
 			json.NewEncoder(w).Encode(errorresp)
 		} else {
-			comments = DelComment(comments, body.ID)
-			response := Response{
-				Status: "OK",
+			comment, errors := DelComment(comments, body.ID, OAuthData.UserID)
+			if errors.Description == "200 OK" {
+				comments = comment
+				response := Response{
+					Status: "OK",
+				}
+				json.NewEncoder(w).Encode(response)
+			} else {
+				HeaderWriter(w, errors)
+				json.NewEncoder(w).Encode(errors)
 			}
-			json.NewEncoder(w).Encode(response)
 		}
 	} else {
 		HeaderWriter(w, err)
