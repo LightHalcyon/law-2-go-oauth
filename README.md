@@ -13,7 +13,7 @@ go install github.com/reznov53/law-2-go-oauth
 
 The executable will be available at `$GOPATH/bin`
 
-### Used environment variable:
+### Used environment variable
 
 `$OAUTHURL`      = URL for OAuth server
 
@@ -33,6 +33,8 @@ All routes below will return this payload if error
 ```
 
 ### api/v1/login
+
+#### POST
 
 Logs the user in
 
@@ -55,7 +57,9 @@ Output Payload (200 OK):
 ```
 
 ### api/v1/users
+
 #### POST
+
 Register current logged in user with provided display name. Requires Authorization header with value `"Bearer access_token"`
 
 Input Payload:
@@ -69,7 +73,7 @@ Input Payload:
 Output Payload:
 
 ```json
-{ 
+{
     "status" : "ok",
     "userId": 1,
     "displayName": "Some User" 
