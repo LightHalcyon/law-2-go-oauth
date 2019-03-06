@@ -276,7 +276,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 					Description: "500 Internal Server Error",
 				}
 				log.Println(decodeError)
-				// HeaderWriter(w, errorresp)
+				HeaderWriter(w, errorresp)
 				json.NewEncoder(w).Encode(errorresp)
 			} else {
 				jsonstr := jsonresp{
@@ -323,7 +323,7 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 				Status:      "error",
 				Description: "500 Internal Server Error",
 			}
-			// HeaderWriter(w, errorresp)
+			HeaderWriter(w, errorresp)
 			json.NewEncoder(w).Encode(errorresp)
 		} else {
 			user := User{
@@ -344,7 +344,7 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 					Status:      "error",
 					Description: "403 Forbidden",
 				}
-				// HeaderWriter(w, errorresp)
+				HeaderWriter(w, errorresp)
 				json.NewEncoder(w).Encode(errorresp)
 			}
 		}
@@ -420,7 +420,7 @@ func PostComment(w http.ResponseWriter, r *http.Request) {
 				Status:      "error",
 				Description: "500 Internal Server Error",
 			}
-			// HeaderWriter(w, errorresp)
+			HeaderWriter(w, errorresp)
 			json.NewEncoder(w).Encode(errorresp)
 		} else {
 			displayName := FindUName(users, OAuthData.UserID)
@@ -520,7 +520,7 @@ func GetCommentByID(w http.ResponseWriter, r *http.Request) {
 			Status:      "error",
 			Description: "500 Internal Server Error",
 		}
-		// HeaderWriter(w, errorresp)
+		HeaderWriter(w, errorresp)
 		json.NewEncoder(w).Encode(errorresp)
 	} else {
 		comment, _ := FindComment(comments, ID)
@@ -553,7 +553,7 @@ func DeleteComment(w http.ResponseWriter, r *http.Request) {
 				Status:      "error",
 				Description: "500 Internal Server Error",
 			}
-			// HeaderWriter(w, errorresp)
+			HeaderWriter(w, errorresp)
 			json.NewEncoder(w).Encode(errorresp)
 		} else {
 			comment, errors := DelComment(comments, body.ID, OAuthData.UserID)
@@ -597,7 +597,7 @@ func UpdateComment(w http.ResponseWriter, r *http.Request) {
 				Status:      "error",
 				Description: "500 Internal Server Error",
 			}
-			// HeaderWriter(w, errorresp)
+			HeaderWriter(w, errorresp)
 			json.NewEncoder(w).Encode(errorresp)
 		} else {
 			commentItem, i := FindComment(comments, body.ID)
